@@ -156,7 +156,7 @@ end
 
 
         function rgb = parseColorFlexible(cstr)
-    rgb = [0.75 0.75 0.75];
+    rgb = [0 0 0];
     if isa(cstr,'string') || ischar(cstr), s = strtrim(char(cstr));
     else, return; end
     if isempty(s), return; end
@@ -177,7 +177,7 @@ end
             q = sscanf(s, '%f,%f,%f');
             if numel(q)==3
                 if max(q) > 1.01, q = q/255; end
-                rgb = max(0,min(1,q(:)')). return;
+                rgb = max(0,min(1,q(:)')); return;
             end
         catch, end
     end
@@ -1134,13 +1134,7 @@ function VisualizeResultsAsPNGs(app, totalSims, r)
                 geneLevels = MatrixG(N, :);
                 sumExpr    = sum(geneLevels);
 
-                % Gray when no expression (your rule)
-                if sumExpr <= 0
-                    colorVal = [0.75 0.75 0.75];
-                else
-                    weights  = geneLevels / sumExpr;
-                    colorVal = weights * geneRGBsUsed;
-                end
+                colorVal = app.computeCellColor(geneLevels, geneRGBsUsed);
 
                 surf(rx, ry, rz, 'FaceAlpha', 1, 'FaceColor', colorVal, 'EdgeColor', 'none');
             end
@@ -1240,15 +1234,8 @@ set(axesHandle, 'XDir','normal', ...
         if nnz(Distance(k,:) < 2*r) > 1
             [rx, ry, rz] = ellipsoid(MatrixP(k,1), MatrixP(k,2), MatrixP(k,3), r, r, r, 20);
             gl = MatrixG(k,:);
-            s  = sum(gl);
 
-            % Gray when no expression
-            if s <= 0
-                c = [0.75 0.75 0.75];
-            else
-                w = gl / s;
-                c = w * geneRGBsUsed;
-            end
+            c = app.computeCellColor(gl, geneRGBsUsed);
 
             srf = surf(axesHandle, rx, ry, rz, ...
                 'FaceAlpha', 1, 'FaceColor', c, 'EdgeColor', 'none');
@@ -1523,14 +1510,8 @@ end
                         if nnz(D(k,:) < 2*radius) > 1
                             [rx, ry, rz] = ellipsoid(P(k,1), P(k,2), P(k,3), radius, radius, radius, 20);
                             gl = G(k,:);
-                            s  = sum(gl);
-        
-                            if s <= 0
-                                c = [0.75 0.75 0.75];  
-                            else
-                                w = gl / s;
-                                c = w * geneRGBsUsed;
-                            end
+
+                            c = app.computeCellColor(gl, geneRGBsUsed);
         
                             surf(ax, rx, ry, rz, 'FaceAlpha',1, 'FaceColor',c, 'EdgeColor','none');
                         end
@@ -1675,13 +1656,7 @@ end
             if nnz(D(N,:) < 2*r) > 1
                 [rx, ry, rz] = ellipsoid(P(N,1), P(N,2), P(N,3), r, r, r, 20);
 
-                s = sum(G(N,:));
-                if s <= 0
-                    colorVal = [0.75 0.75 0.75];            
-                else
-                    w = G(N,:) / s;
-                    colorVal = max(0, min(1, w * geneRGBsUsed));
-                end
+                colorVal = app.computeCellColor(G(N,:), geneRGBsUsed);
 
                 surf(ax, rx, ry, rz, 'FaceAlpha',1, 'FaceColor',colorVal, 'EdgeColor','none');
             end
@@ -1768,10 +1743,7 @@ if max(geneRGBs,[],'all') > 1.5
     geneRGBs = geneRGBs ./ 255;
 end
 
-geneRGBs = max(0, min(1, geneRGBs));
-
-zeroRow = all(geneRGBs == 0, 2);
-geneRGBs(zeroRow, :) = 0.75;     
+geneRGBs = max(0, min(1, geneRGBs));   
 
 
     if size(geneRGBs,1) < GeneNum
@@ -1780,7 +1752,52 @@ geneRGBs(zeroRow, :) = 0.75;
     elseif size(geneRGBs,1) > GeneNum
         geneRGBs = geneRGBs(1:GeneNum, :);
     end
+        end
+
+    function c = computeCellColor(app, gl, geneRGBsUsed)
+    % Linear blend:
+    %   - Start at gray = [0.75 0.75 0.75]
+    %   - Add each colored gene's RGB scaled by its expression
+    %   - If total colored expression t <= 1: c = (1 - t)*gray + sum_i e_i * color_i
+    %   - If t > 1: use relative mix only (no gray) to avoid overshoot: c = (e/t) * colors
+
+    gray = [0.75 0.75 0.75];
+
+    % Clamp expressions to [0,1] and flatten
+    gl = max(0, min(1, gl(:)'));          % 1 x G
+
+    % Keep only genes that actually have color (any nonzero RGB channel)
+    colored = any(geneRGBsUsed > 0, 2)';  % 1 x G logical (transpose for row indexing)
+    if ~any(colored)
+        c = gray; 
+        return;
+    end
+
+    e = gl(colored);                      % 1 x K (K colored genes)
+    C = geneRGBsUsed(colored, :);         % K x 3
+
+    t = sum(e);                           % total colored expression
+
+    if t <= 0
+        c = gray;
+        return;
+    elseif t <= 1
+        % Linear move from gray toward the color mix
+        mix = e * C;                      % 1 x 3
+        c   = (1 - t) * gray + mix;       % convex combo with gray
+    else
+        % If total > 1, drop gray and show the relative color proportions
+        % (prevents channel overshoot & keeps continuity at t=1)
+        mix = (e / t) * C;                % normalized colored mix
+        c   = mix;
+    end
+
+    % Final clamp
+    c = max(0, min(1, c));
 end
+
+
+
 
 
     end
@@ -3315,12 +3332,12 @@ end
             app.kappaGEditField.Value = 0.0001;
             app.kappaFEditField.Value = 0.1;
 
-            app.MorphogenStrengthEditField.Value = 0.0185;
+            app.MorphogenStrengthEditField.Value = 0.02;
             app.HillCoefficientEditField.Value = 2;
             app.DistancePowerEditField.Value = 2;
 
-            app.betaSEditField.Value = 0.175;
-            app.betaLEditField.Value = 0.125;
+            app.betaSEditField.Value = 0.2;
+            app.betaLEditField.Value = 0.13;
 
             app.ParallelPoolSizeDropDown.Value = '8';
             app.TotalSimulationEditField.Value = 8;
@@ -3890,7 +3907,7 @@ end
 
         end
 
-        % Button pushed function: ExportMovieButton
+                % Button pushed function: ExportMovieButton
         function ExportMovieButtonPushed(app, event)
 
             try
@@ -3905,6 +3922,7 @@ end
                 TmaxUI = app.MaximumTimeEditField.Value;
                 r      = app.RadiusEditField.Value;
             
+                % ---- Core movie settings dialog ----
                 prompt   = {'Output # (e.g., 1):', ...
                             sprintf('Start time (0 .. %g):', TmaxUI), ...
                             sprintf('End time (0 .. %g):',   TmaxUI), ...
@@ -3918,7 +3936,7 @@ end
                 tStart = str2double(answer{2});
                 tEnd   = str2double(answer{3});
                 fps    = str2double(answer{4});
-                if any(isnan([simIdx,tStart,tEnd,fps])) || simIdx<1 || fps<=0
+                if any(isnan([simIdx,tStart,tEnd,fps])) || simIdx < 1 || fps <= 0
                     uialert(app.UIFigure, 'Invalid settings.', 'Export Movie');
                     return;
                 end
@@ -3929,8 +3947,19 @@ end
                     return;
                 end
             
-                strideLabels = {'Full (1×)','Half (2×)','Quarter (4×)','Eighth (8×)','Custom…'};
-                strideVals   = [1 2 4 8 -1];
+                % ---- Resolution (frame stride) dialog ----
+                % 1 = every frame, 2 = every 2nd frame, etc.
+                strideLabels = { ...
+                    'Full (1×)', ...          % stride = 1
+                    'Half (2×)', ...          % stride = 2
+                    'Quarter (4×)', ...       % stride = 4
+                    'Eighth (8×)', ...        % stride = 8
+                    'Sixteenth (16×)', ...    % stride = 16
+                    'Thirty-second (32×)', ...% stride = 32
+                    'Sixty-fourth (64×)', ... % stride = 64
+                    'Custom…'};               % prompt for integer
+                strideVals   = [1 2 4 8 16 32 64 -1];
+                
                 [sel, ok] = listdlg('PromptString','Resolution (frame stride):', ...
                                     'SelectionMode','single', ...
                                     'ListString',strideLabels, ...
@@ -3939,62 +3968,53 @@ end
                 if ~ok, return; end
                 stride = strideVals(sel);
                 if stride == -1
-                    ans2 = inputdlg({'Custom stride (positive integer):'}, 'Custom Resolution', 1, {'3'});
+                    ans2 = inputdlg({'Custom stride (positive integer):'}, ...
+                                    'Custom Resolution', 1, {'3'});
                     if isempty(ans2), return; end
                     stride = max(1, round(str2double(ans2{1})));
-                    if isnan(stride) || stride<1
-                        uialert(app.UIFigure, 'Stride must be a positive integer.', 'Export Movie'); return;
-                    end
-                end
-
-                % ---- View / Camera selection ----
-                viewLabels = { ...
-                    'Top (X–Y plane)', ...
-                    'Front (X–Z plane)', ...
-                    'Side (Y–Z plane)', ...
-                    'Isometric', ...
-                    'Custom az,el…' };
-                viewCodes  = {'top','front','side','iso','custom'};
-                
-                [isel, ok] = listdlg('PromptString','Choose movie viewpoint:', ...
-                                     'SelectionMode','single', ...
-                                     'ListString',viewLabels, ...
-                                     'InitialValue',4, ...   
-                                     'Name','View');
-                if ~ok, return; end
-                viewCode   = viewCodes{isel};
-                customAzEl = [];
-                if strcmp(viewCode,'custom')
-                    ansV = inputdlg({'Azimuth (-180..180):','Elevation (-90..90):'}, ...
-                                     'Custom View', 1, {'-165','-70'});
-                    if isempty(ansV), return; end
-                    customAzEl = [str2double(ansV{1}), str2double(ansV{2})];
-                    if any(isnan(customAzEl))
-                        uialert(app.UIFigure, 'Invalid azimuth/elevation.', 'Export Movie');
+                    if isnan(stride) || stride < 1
+                        uialert(app.UIFigure, 'Stride must be a positive integer.', 'Export Movie');
                         return;
                     end
                 end
 
+                % ---- View / Camera selection: custom az,el only ----
+                viewCode   = 'custom';
+                customAzEl = [];
+                ansV = inputdlg({'Azimuth (-180..180):', 'Elevation (-90..90):'}, ...
+                                'Custom View (az, el)', 1, {'-165','-70'});
+                if isempty(ansV), return; end
+                customAzEl = [str2double(ansV{1}), str2double(ansV{2})];
+                if any(isnan(customAzEl)) || numel(customAzEl) ~= 2
+                    uialert(app.UIFigure, 'Invalid azimuth/elevation.', 'Export Movie');
+                    return;
+                end
 
+                % ---- Output file dialog ----
                 [file, path] = uiputfile({'*.mp4','MPEG-4 Video (*.mp4)'}, ...
-                                         'Save Movie As', sprintf('OUTPUT%d_movie.mp4', simIdx));
+                                         'Save Movie As', ...
+                                         sprintf('OUTPUT%d_movie.mp4', simIdx));
                 if isequal(file,0), return; end
                 outFile = fullfile(path, file);
             
+                % ---- Run export with progress wiring ----
                 app.vizInit();
                 app.vizStep(0.02, "Scanning frames…");
             
-                app.ExportMovieForSim(simIdx, fps, tStart, tEnd, r, outFile, stride, viewCode, customAzEl);
-
+                app.ExportMovieForSim(simIdx, fps, tStart, tEnd, r, ...
+                                      outFile, stride, viewCode, customAzEl);
             
                 app.vizDone();
                 app.StatusLabel.Text = "Movie export complete!";
             catch ME
-                try, app.vizDone(); end 
-                uialert(app.UIFigure, getReport(ME,'basic','hyperlinks','off'), 'Export Movie Error');
+                try, app.vizDone(); end  %#ok<TRYNC>
+                uialert(app.UIFigure, ...
+                        getReport(ME,'basic','hyperlinks','off'), ...
+                        'Export Movie Error');
             end
 
         end
+
 
         % Button pushed function: ExportOutputFilesButton
         function ExportOutputFilesButtonPushed(app, event)
@@ -4312,7 +4332,7 @@ app.ensureInit();
             app.MorphogenStrengthEditField = uieditfield(app.ParametersPanel, 'numeric');
             app.MorphogenStrengthEditField.Limits = [0 Inf];
             app.MorphogenStrengthEditField.Position = [150 183 101 22];
-            app.MorphogenStrengthEditField.Value = 0.0185;
+            app.MorphogenStrengthEditField.Value = 0.02;
 
 
             % Plain text label (no LaTeX)
@@ -4348,7 +4368,7 @@ app.ensureInit();
             app.betaSEditField = uieditfield(app.ParametersPanel,'numeric');
             app.betaSEditField.Limits   = [0 Inf];
             app.betaSEditField.Position = [150 120 101 22];
-            app.betaSEditField.Value    = 0.175;
+            app.betaSEditField.Value    = 0.2;
             
             % LaTeX badge: K_alpha, placed just to the left of the field
             bsPos = app.betaSEditField.Position;
@@ -4371,7 +4391,7 @@ app.ensureInit();
             app.betaLEditField = uieditfield(app.ParametersPanel,'numeric');
             app.betaLEditField.Limits   = [-Inf Inf];   % keep your original range
             app.betaLEditField.Position = [150 88 101 22];
-            app.betaLEditField.Value    = 0.125;
+            app.betaLEditField.Value    = 0.13;
             
             % LaTeX badge: K_beta, placed just to the left of the field
             blPos = app.betaLEditField.Position;
