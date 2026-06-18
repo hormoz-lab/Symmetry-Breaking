@@ -4,8 +4,8 @@
 %User Settings
 simIdx  = 1;               % which OUTPUT<simIdx> folder to read
 r       = 1.0;             % cell radius
-gene    = 2;               % which gene to color by (1, 2, or 3)
-AZEL    = [-60 15];        % [az el] in degrees
+gene    = 3;               % which gene to color by (1, 2, or 3)
+AZEL    = [-23 70];        % [az el] in degrees
 
 %[first frame after initial : frame spacing : Last frame grabbed]
 

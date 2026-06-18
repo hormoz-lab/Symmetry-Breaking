@@ -68,8 +68,8 @@ function Plot_Gene_Time_Series(Tmax, dt, GeneNum)
         ax.TitleFontSizeMultiplier = 1;
         ax.FontName = 'Arial';
 
-        hX = xlabel(ax, 'Time', 'Interpreter','none');
-        hY = ylabel(ax, sprintf('Gene %d Expression', g), 'Interpreter','none');
+        % hx = xlabel('\itin silico\rm time for pattern formation','Interpreter','tex');
+        % hY = ylabel(ax, sprintf('G%d Expression', g), 'Interpreter','none');
         hX.FontUnits = 'points'; hY.FontUnits = 'points';
         hX.FontSize  = 32;       hY.FontSize  = 32;
         hX.FontName  = 'Arial';  hY.FontName  = 'Arial';

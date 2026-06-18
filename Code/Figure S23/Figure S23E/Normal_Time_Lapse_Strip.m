@@ -57,7 +57,7 @@ end
 [MatrixP0, ~] = loadMatrixFrame(outDir, 'initial', []);
 s0   = MatrixP0 * right(:);                 
 span = (max(s0) - min(s0)) + 2*r;      
-tileStep = span + gapAlongRight;        
+tileStep = 1.15 * span + gapAlongRight;        
 
 % Render initial
 [MatrixP, MatrixG] = loadMatrixFrame(outDir, 'initial', []);

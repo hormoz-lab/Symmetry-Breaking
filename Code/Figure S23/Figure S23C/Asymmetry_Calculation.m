@@ -176,7 +176,7 @@ ok = readOK & ~isnan(asymVals);
 fig = figure('Color','w');
 fig.Units = 'inches';
 pos = fig.Position;
-fig.Position = [pos(1) pos(2) pos(3)*2 pos(4)]; 
+fig.Position = [pos(1) pos(2) pos(3)*1.75 pos(4)]; 
 
 plot(time(ok), asymVals(ok), 'LineWidth', 2, 'Color', [0 0 0]); hold on;
 
@@ -198,8 +198,8 @@ ax.YMinorTick = 'off';
 ax.LabelFontSizeMultiplier = 1;   
 ax.TitleFontSizeMultiplier = 1;
 
-hx = xlabel('Time'); 
-hy = ylabel('Morphological Asymmetry (A)');
+% hx = xlabel('\itin silico\rm time for pattern formation','Interpreter','tex');
+% hy = ylabel('Morphological Asymmetry (A)');
 hx.FontSize = 25;      hy.FontSize = 25;
 hx.FontName = 'Arial';  hy.FontName = 'Arial';
 hx.FontSizeMode = 'manual'; 
